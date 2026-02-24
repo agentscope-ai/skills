@@ -20,7 +20,7 @@ jobs:
         python-version: '3.10'
     - name: Update setuptools
       run: |
-        pip install setuptools==68.2.2 wheel==0.41.2
+        pip install setuptools==68.2.2 wheel==0.41.2 pre-commit
     - name: Install pre-commit
       run: |
         pre-commit install
