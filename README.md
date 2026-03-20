@@ -1,8 +1,8 @@
-# AgentScope Skills
+# Skills
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-A curated collection of **skills** for the [AgentScope](https://github.com/agentscope-ai/agentscope) ecosystem — ready to be installed into AI coding assistants like Claude Code, Cursor, and more.
+A curated collection of **skills** around [AgentScope](https://github.com/agentscope-ai/agentscope) ecosystem and CoPaw applications — ready to be installed into AI coding assistants like Claude Code, Cursor, and more.
 
 Each skill is a self-contained knowledge pack that gives your AI assistant deep, accurate context about AgentScope: its APIs, design patterns, examples, and best practices. Instead of hallucinating APIs or reinventing existing features, your assistant can consult these skills to produce correct, idiomatic AgentScope code.
 
