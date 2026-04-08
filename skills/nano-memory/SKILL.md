@@ -1,5 +1,6 @@
 ---
-name: "nano memory skill"
+name: nano-memory
+version: 1.0.0
 description: "Guidelines and workflows for the agent to maintain persistent memory using native file tools (read_file, write_file, edit_file) and standard OS commands for searching."
 ---
 
