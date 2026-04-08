@@ -42,8 +42,8 @@ You have access to native file tools and standard OS commands. Use them strictly
 
 ## 🎯 Proactive Recording - No "Mental Notes"!
 
-- **Memory is limited:** "Mental notes" do not survive session restarts. If it is not written to a file, it does not exist. 
-- **Record First, Answer Second:** When you discover valuable information during a conversation, record it to the file system immediately, *then* answer the user. 
+- **Memory is limited:** "Mental notes" do not survive session restarts. If it is not written to a file, it does not exist.
+- **Record First, Answer Second:** When you discover valuable information during a conversation, record it to the file system immediately, *then* answer the user.
 - **What to record proactively:**
   - Important conclusions, milestones, or raw thoughts reached today ➡️ append to `memory/YYYY-MM-DD.md`.
   - Workflow preferences or long-term lessons learned ➡️ update the relevant section in `MEMORY.md` using `edit_file`.
