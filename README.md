@@ -52,7 +52,6 @@ cp -r agentscope-skills/skills/{skill_name} ~/.cursor/skills/{skill_name}.md
 |------------------|---------------------------|------------------------------------------------------------------|
 | agentscope-skill | `skills/agentscope-skill` | Use this skill when building or working with AgentScope library. |
 | nano-memory      | `skills/nano-memory`      | Guidelines and workflows for the agent to maintain persistent memory using native file tools (read_file, write_file, edit_file) and standard OS commands for searching. |
-| feishu_cloud_doc | `skills/feishu_cloud_doc` | Operate on Feishu/Lark cloud documents via Open API. Covers Documents (Docx), Spreadsheets (Sheets), Bitables (multi-dimensional tables), Wiki (knowledge base), and sharing/permissions management. |
 | Coming soon...   | -                         | -                                                                |
 
 ---
