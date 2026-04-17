@@ -11,7 +11,7 @@ metadata:
 
 ## 什么时候用
 
-当你**需要其他 agent 的专业能力、上下文、workspace 内容或协作支持**时，使用本 skill。  
+当你**需要其他 agent 的专业能力、上下文、workspace 内容或协作支持**时，使用本 skill。
 如果**用户明确要求某个 agent 参与/协助/回答**，也应使用本 skill。
 
 ### 应该使用
@@ -434,7 +434,7 @@ Error: （错误信息...）
 **方式 1：处理其他任务后再查**（推荐）
 ```bash
 # 1. 提交任务，记录 task_id
-qwenpaw agents chat --background ... 
+qwenpaw agents chat --background ...
 # 返回 task_id
 
 # 2. 继续处理用户的其他请求或任务

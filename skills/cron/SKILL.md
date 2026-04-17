@@ -44,7 +44,7 @@ metadata:
 --agent-id <your_agent_id>
 ```
 
-你的 agent_id 在系统提示中的 Agent Identity 部分（Your agent id is ...）。  
+你的 agent_id 在系统提示中的 Agent Identity 部分（Your agent id is ...）。
 不得省略，否则任务可能错误创建到 default agent 的 workspace。
 
 ---
