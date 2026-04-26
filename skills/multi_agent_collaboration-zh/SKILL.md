@@ -1,17 +1,17 @@
 ---
 name: multi_agent_collaboration
-description: Use this skill when another agent's expertise/context is needed, or when the user explicitly asks to involve another agent. First list agents, then use qwenpaw agents chat for two-way communication with replies. | 当需要其他 agent 的专长/上下文，或用户明确要求调用其他 agent 时使用；先查 agent，再用 qwenpaw agents chat 双向通信（有回复）
+description: 当需要其他 agent 的专长、上下文或协作支持，或用户明确要求调用其他 agent 时，使用本 skill。先查询可用 agents，再用 qwenpaw agents chat 进行双向沟通。
 metadata:
-  builtin_skill_version: "1.3"
+  builtin_skill_version: "1.4"
   qwenpaw:
     emoji: "🤝"
 ---
 
-# Multi-Agent Collaboration（多智能体协作）
+# 多智能体协作
 
 ## 什么时候用
 
-当你**需要其他 agent 的专业能力、上下文、workspace 内容或协作支持**时，使用本 skill。
+当你**需要其他 agent 的专业能力、上下文、workspace 内容或协作支持**时，使用本 skill。  
 如果**用户明确要求某个 agent 参与/协助/回答**，也应使用本 skill。
 
 ### 应该使用
@@ -434,7 +434,7 @@ Error: （错误信息...）
 **方式 1：处理其他任务后再查**（推荐）
 ```bash
 # 1. 提交任务，记录 task_id
-qwenpaw agents chat --background ...
+qwenpaw agents chat --background ... 
 # 返回 task_id
 
 # 2. 继续处理用户的其他请求或任务

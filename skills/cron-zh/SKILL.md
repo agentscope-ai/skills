@@ -1,13 +1,13 @@
 ---
 name: cron
-description: Use this skill only for scheduled or recurring tasks. Manage cron jobs with qwenpaw cron list/create/get/state/pause/resume/delete/run. Always pass --agent-id explicitly. | 仅在需要未来定时执行或周期执行时使用本 skill。用 qwenpaw cron list/create/get/state/pause/resume/delete/run 管理任务；必须显式传 --agent-id
+description: 仅在需要未来定时执行或周期执行任务时，使用本 skill。使用 qwenpaw cron list/create/get/state/pause/resume/delete/run 管理任务，并始终显式传入 --agent-id。
 metadata:
-  builtin_skill_version: "1.3"
+  builtin_skill_version: "1.4"
   qwenpaw:
     emoji: "⏰"
 ---
 
-# Cron（定时任务管理）
+# 定时任务管理
 
 ## 什么时候用
 
@@ -44,7 +44,7 @@ metadata:
 --agent-id <your_agent_id>
 ```
 
-你的 agent_id 在系统提示中的 Agent Identity 部分（Your agent id is ...）。
+你的 agent_id 在系统提示中的 Agent Identity 部分（Your agent id is ...）。  
 不得省略，否则任务可能错误创建到 default agent 的 workspace。
 
 ---

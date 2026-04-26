@@ -2,13 +2,13 @@
 name: dingtalk_channel_connect
 description: "使用可视浏览器自动完成 QwenPaw 的钉钉频道接入。适用于用户提到钉钉、DingTalk、开发者后台、Client ID、Client Secret、机器人、Stream 模式、绑定或配置 channel 的场景；支持遇到登录页时暂停，等待用户登录后继续。"
 metadata:
-  builtin_skill_version: "1.2"
+  builtin_skill_version: "1.3"
   qwenpaw:
     emoji: "🤖"
     requires: {}
 ---
 
-# 钉钉 Channel 自动连接（可视浏览器）
+# 钉钉频道自动连接（可视浏览器）
 
 此 skill 用于通过可视浏览器自动化完成钉钉应用创建与 QwenPaw channel 绑定。
 

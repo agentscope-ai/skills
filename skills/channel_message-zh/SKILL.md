@@ -1,17 +1,17 @@
 ---
 name: channel_message
-description: Use this skill to proactively send a one-way message to a user/session/channel, usually only when the user explicitly asks to send to a channel/session or when proactive notification is needed. First query sessions with qwenpaw chats list, then push with qwenpaw channels send. | 当需要主动向用户/会话/频道单向推送消息时使用，通常仅在用户明确要求发往某个 channel / 会话，或需要主动通知时使用；先用 qwenpaw chats list 查 session，再用 qwenpaw channels send 推送
+description: 当需要主动向用户、会话或频道单向发送消息时，使用本 skill。通常仅在用户明确要求向某个 channel / 会话发送消息，或需要主动通知时使用。先用 qwenpaw chats list 查询 session，再用 qwenpaw channels send 推送消息。
 metadata:
-  builtin_skill_version: "1.2"
+  builtin_skill_version: "1.3"
   qwenpaw:
     emoji: "📤"
 ---
 
-# Channel Message（频道消息推送）
+# 频道消息推送
 
 ## 什么时候用
 
-通常只有在**用户明确要求向某个 channel / 会话发送消息**，或你需要**主动推送通知**（如任务完成、提醒、告警）时，使用本 skill。
+通常只有在**用户明确要求向某个 channel / 会话发送消息**，或你需要**主动推送通知**（如任务完成、提醒、告警）时，使用本 skill。  
 这是**单向发送**，**不会返回回复**。
 
 ### 应该使用
