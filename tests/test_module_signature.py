@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """Exercise discovery without depending on an installed AgentScope version."""
 import importlib.util
+import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -35,6 +37,14 @@ class InspectorTests(unittest.TestCase):
             "    async def reply(self, inputs=None):\n"
             '        """Return a response."""\n'
             "        return inputs\n"
+            "    async def stream(self):\n"
+            "        yield 'chunk'\n"
+            "    @classmethod\n"
+            "    def create(cls, name):\n"
+            "        return cls(name)\n"
+            "    @staticmethod\n"
+            "    def label():\n"
+            "        return 'agent'\n"
             "class Agent(Parent):\n"
             "    def __init__(self, name):\n"
             "        self.name = name\n"
@@ -48,7 +58,9 @@ class InspectorTests(unittest.TestCase):
         (package / "lazy.py").write_text(
             '__all__ = ["OptionalBackend"]\n'
             "def __getattr__(name):\n"
-            "    import missing_agentscope_test_dependency\n",
+            "    if name == 'OptionalBackend':\n"
+            "        import missing_agentscope_test_dependency\n"
+            "    raise AttributeError(name)\n",
             encoding="utf-8",
         )
         self.module_patch = patch.dict(sys.modules)
@@ -105,6 +117,94 @@ class InspectorTests(unittest.TestCase):
                 INSPECTOR.resolve_target(name)
         with self.assertRaises(AttributeError):
             INSPECTOR.resolve_target("agentscope.agent.Agent.missing")
+
+    def run_cli(
+        self,
+        *args: str,
+        without_site: bool = False,
+    ) -> subprocess.CompletedProcess:
+        """Execute the actual script against the isolated fixture package."""
+        env = dict(os.environ, PYTHONPATH=self.temp_path)
+        command = [sys.executable]
+        if without_site:
+            command.append("-S")
+        return subprocess.run(
+            [*command, str(SCRIPT), *args],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+
+    def test_cli_success_cases(self) -> None:
+        """Run module, class, method, and value queries as commands."""
+        cases = [
+            ((), "agentscope.agent"),
+            (("--help",), "--module"),
+            (("--module", "agentscope.agent"), "agentscope.agent.Agent"),
+            (("--module", "agentscope.agent.Agent"), "defined on Parent"),
+            (("--module", "agentscope.agent.Agent.reply"), "async def reply"),
+            (
+                ("--module", "agentscope.agent.Agent.stream"),
+                "async def stream",
+            ),
+            (
+                ("--module", "agentscope.agent.Agent.create"),
+                "def create(name)",
+            ),
+            (("--module", "agentscope.agent.Agent.label"), "def label()"),
+            (("--module", "agentscope.__version__"), "'2.test'"),
+            (("--module", "agentscope.lazy"), "lazy export"),
+        ]
+        for args, expected in cases:
+            with self.subTest(args=args):
+                result = self.run_cli(*args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(expected, result.stdout)
+                self.assertEqual(result.stderr, "")
+
+    def test_cli_import_and_path_errors(self) -> None:
+        """Return a nonzero status and useful errors, without tracebacks."""
+        cases = [
+            ("agentscope_fake", "dotted path"),
+            ("agentscope..agent", "dotted path"),
+            ("agentscope.missing", "missing"),
+            ("agentscope.agent.Agent.missing", "missing"),
+            ("agentscope.optional", "missing_agentscope_test_dependency"),
+            (
+                "agentscope.lazy.OptionalBackend",
+                "missing_agentscope_test_dependency",
+            ),
+        ]
+        for name, expected in cases:
+            with self.subTest(name=name):
+                result = self.run_cli("--module", name)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(expected, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertEqual(result.stdout, "")
+
+    def test_cli_argument_errors(self) -> None:
+        """Let argparse report missing values and unsupported flags."""
+        for args in [("--module",), ("--unknown",)]:
+            with self.subTest(args=args):
+                result = self.run_cli(*args)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("usage:", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_cli_without_agentscope(self) -> None:
+        """Help works without the SDK and queries explain a missing install."""
+        # Remove the fixture and disable site-packages for this subprocess.
+        package = Path(self.temp_path) / "agentscope"
+        package.rename(package.with_name("hidden_package"))
+        result = self.run_cli(without_site=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("No module named 'agentscope'", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        help_result = self.run_cli("--help", without_site=True)
+        self.assertEqual(help_result.returncode, 0)
 
 
 if __name__ == "__main__":

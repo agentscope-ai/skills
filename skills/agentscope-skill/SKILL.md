@@ -7,7 +7,11 @@ metadata:
 
 # AgentScope 2.0
 
-AgentScope consists of two layers:
+AgentScope is an open-source framework for building and serving LLM-powered
+agent applications, from a single tool-using agent to coordinated multi-agent
+systems. It provides application orchestration and service infrastructure;
+model inference comes from configured providers, and tools execute through
+configured local or sandbox backends. It consists of two layers:
 
 - **Agent SDK:** Building blocks for agent applications, including agents,
   models, messages, tools, context and state management, middleware, memory,
@@ -44,6 +48,11 @@ uv pip install agentscope
 - `Msg` contains typed content blocks. `UserMsg`, `AssistantMsg`, and `SystemMsg`
   are convenience factories that also accept text strings. Binary media uses
   `DataBlock` with `URLSource` or `Base64Source`, including `media_type`.
+- **Event:** Typed events expose agent execution to the application: reply and
+  model-call lifecycle, streamed content, tool calls/results, and requests for
+  confirmation or external execution. Consume them through `reply_stream()`;
+  send interaction result events back to resume the agent. `Msg` represents
+  conversation content, while events describe execution and interaction.
 - `AgentState` holds conversation and execution state. Agent configuration uses
   `ContextConfig`, `InjectionConfig`, `ModelConfig`, and `ReActConfig`.
   Middleware adds memory, RAG, tracing, and other hooks.
@@ -201,8 +210,8 @@ them; check base classes and inherited methods before adding custom behavior.
   Development directions.
 - [Project board](https://github.com/orgs/agentscope-ai/projects/2): Development
   task tracking.
-- [Design discussions](https://github.com/agentscope-ai/agentscope/discussions/categories/agentscope-design-book):
-  Design rationale and module discussions.
+- [Discussions](https://github.com/agentscope-ai/agentscope/discussions):
+  Community questions, ideas, and framework design discussions.
 
 ### References
 
