@@ -1,8 +1,7 @@
 # Multi-Agent Orchestration in AgentScope 2.x
 
-Use the 2.x baseline and installation instructions in [SKILL.md](../SKILL.md).
-The old `MsgHub` and `stream_printing_messages` examples do not apply to this
-version. Choose the orchestration mechanism based on who controls execution.
+Choose the orchestration mechanism based on who controls execution: application
+code, a leader agent, a pipeline, or the service layer.
 
 ## Explicit message passing
 
@@ -32,9 +31,9 @@ concurrent independent conversations.
 
 ## Worker as a function tool
 
-Use this pattern when a leader model chooses when to delegate. This complete
-example gives the worker no tools, so its reply does not require nested tool
-confirmation. Set `DASHSCOPE_API_KEY` before running it.
+Use this pattern when a leader model chooses when to delegate. This example
+gives the worker no tools, so its reply does not require nested tool
+confirmation.
 
 ```python
 import asyncio
@@ -122,7 +121,7 @@ settings for the application rather than copying a demo's bypass mode.
 - **Agent Team:** For persistent leader/worker coordination within the agent
   service, inspect `examples/agent_service/`, `agentscope.app.SubAgentTemplate`,
   and the team implementation under `src/agentscope/app/`. The service manages
-  team sessions and tools; it is not a replacement class named `MsgHub`.
+  team sessions and tools.
 - **A2A:** Use `agentscope.agent.A2AAgent` when communicating with a remote A2A
   agent. Start from `examples/a2a/` and check the target constructor and optional
   dependencies before configuring the remote endpoint.

@@ -1,49 +1,37 @@
 ---
 name: agentscope-skill
-description: Build, debug, and migrate Python applications using AgentScope 2.x. Consult this skill for AgentScope APIs, agent tools, multi-agent orchestration, and agent service deployment.
+description: Build and debug Python applications using AgentScope 2.x. Consult this skill for AgentScope APIs, agent tools, multi-agent orchestration, and agent service deployment.
 metadata:
   version: "0.2.0"
 ---
 
 # AgentScope 2.0
 
-AgentScope provides a ReAct agent SDK and a FastAPI-based agent service. This
-skill targets **AgentScope 2.x**, verified against upstream `main` commit
-`033a3613401a3e6cbd39608321579481f6bd0953` (2026-09-09), whose source version is
-`2.0.8`. The skill's own version above is independent of the framework version.
+AgentScope consists of two layers:
 
-## Establish the target version
+- **Agent SDK:** Building blocks for agent applications, including agents,
+  models, messages, tools, context and state management, middleware, memory,
+  RAG, multi-agent orchestration, and workspaces.
+- **Service:** A service layer built on the SDK, providing APIs for agent and
+  session management, persistence, teams, scheduling, channels, and resource
+  management, with a Web UI example.
 
-AgentScope 1.x examples are not compatible with the 2.x API. Check the user's
-installed version and source location before choosing examples:
+This skill supports **AgentScope 2.x** and is based on **2.0.8**. API signatures
+and behavior should follow the SDK version actually installed in the user's
+environment. `agentscope-runtime` and `agentscope-studio` are not compatible
+with 2.x; use the built-in service and workspace capabilities instead.
 
-```bash
-python -c 'import agentscope; print(agentscope.__version__, agentscope.__file__)'
-```
+## Installation
 
-Python **3.11 or newer** is required. For a released 2.x version:
-
-```bash
-uv pip install 'agentscope>=2,<3'
-```
-
-When the user targets the latest source, reuse an existing checkout or clone
-into a working directory chosen for the task:
+Python **3.11 or newer** is required.
 
 ```bash
-git clone --branch main https://github.com/agentscope-ai/agentscope.git
-# In an existing checkout, inspect local changes before updating:
-git -C agentscope status --short
-git -C agentscope pull --ff-only origin main
-git -C agentscope rev-parse HEAD
-uv pip install -e ./agentscope
+pip install agentscope
+# or
+uv pip install agentscope
 ```
 
-Record the source revision when validating code. Do not assume PyPI's latest
-release, the checked-out source, and the active Python environment are the same
-version. Preserve a user's pinned 1.x environment unless migration is requested.
-
-## Core API and a working example
+## Core Concepts and Basic Example
 
 - `Agent` owns the reasoning/acting loop. Use `reply()` for a final `Msg`, or
   `reply_stream()` for events. `launch_console()` handles terminal interaction,
@@ -60,8 +48,8 @@ version. Preserve a user's pinned 1.x environment unless migration is requested.
   `ContextConfig`, `InjectionConfig`, `ModelConfig`, and `ReActConfig`.
   Middleware adds memory, RAG, tracing, and other hooks.
 
-Save this example as `main.py`. Set `DASHSCOPE_API_KEY` and optionally
-`DASHSCOPE_MODEL` to a model available to your account, then run `python main.py`:
+The following example shows how to compose an agent with a model and a Python
+function tool:
 
 ```python
 import asyncio
@@ -139,63 +127,99 @@ message = UserMsg(
 )
 ```
 
-Replace the example URL with an accessible image before sending the message.
+## Working with the Repository
 
-## Find the implementation that fits the task
+Reuse an existing AgentScope checkout or clone the repository to inspect its
+examples and implementations before writing application code:
 
-Browse the checked-out examples and relevant source before adapting code; names
-and signatures can change after the baseline above. Prefer existing framework
-features over recreating them.
+```bash
+git clone --branch main https://github.com/agentscope-ai/agentscope.git
+# Inspect local changes before updating an existing checkout.
+git -C agentscope status --short
+git -C agentscope pull --ff-only origin main
+```
 
-| Task | Source / example entry points |
-| --- | --- |
-| Terminal agent, tools, workspace | `examples/console/`, `src/agentscope/console/`, `tool/`, `workspace/` |
-| Model providers and credentials | `src/agentscope/model/`, `src/agentscope/credential/` |
-| Messages, event streaming, HITL | `src/agentscope/message/`, `event/`, `permission/` |
-| Context and persistent memory | `src/agentscope/agent/`, `state/`, `middleware/`, `examples/long_term_memory/` |
-| MCP and agent skills | `src/agentscope/mcp/`, `skill/`, `tool/`, `examples/console/` |
-| Multi-agent workflows | `examples/pipeline/`, `examples/a2a/`, `src/agentscope/app/` |
-| Agent service and Web UI | `examples/agent_service/`, `examples/web_ui/`, `src/agentscope/app/` |
-| Sandboxed tools | `examples/workspace/`, `src/agentscope/workspace/` |
-| RAG | `examples/rag/`, `src/agentscope/rag/`, `src/agentscope/app/rag/` |
-| Realtime voice | `examples/realtime/`, `src/agentscope/realtime/`, `src/agentscope/agent/_realtime/` |
+### Repository Structure
 
-Source shorthand such as `tool/` above is relative to `src/agentscope/`.
-Use the [official documentation](https://docs.agentscope.io/) and
-[upstream repository](https://github.com/agentscope-ai/agentscope) for current
-concepts and examples. Do not assume the old `docs/tutorial/`,
-`examples/functionality/`, `examples/workflows/`, or `examples/deployment/`
-directories exist. The checked-in `docs/changelog.md` still describes the 1.0
-transition at this baseline; inspect current source and `docs/NEWS.md` too.
+```text
+agentscope/
+├── src/agentscope/
+│   ├── agent/          # Agents and their configuration
+│   ├── model/          # Chat model providers
+│   ├── credential/     # Provider credentials
+│   ├── console/        # Terminal interaction and event rendering
+│   ├── formatter/      # Provider-specific message formatting
+│   ├── message/        # Messages and typed content blocks
+│   ├── tool/           # Toolkit, adapters, and built-in tools
+│   ├── mcp/            # MCP clients and configuration
+│   ├── skill/          # Skill loading
+│   ├── state/          # Agent conversation and execution state
+│   ├── middleware/     # Hooks, memory, RAG, tracing, and budgets
+│   ├── event/          # Streaming and interaction events
+│   ├── permission/     # Tool permissions and human confirmation
+│   ├── pipeline/       # Multi-agent workflow abstractions
+│   ├── workspace/      # Local and sandboxed execution backends
+│   ├── rag/            # Retrieval building blocks
+│   ├── embedding/      # Embedding model providers
+│   ├── realtime/       # Realtime model interfaces
+│   ├── tts/            # Text-to-speech models
+│   └── app/            # Service APIs, storage, teams, channels, and hubs
+├── examples/
+│   ├── console/        # Terminal agent composition
+│   ├── agent_service/  # Service configuration
+│   ├── web_ui/         # Service frontend
+│   ├── pipeline/       # Executor/verifier workflow
+│   ├── a2a/            # Remote agent communication
+│   ├── long_term_memory/
+│   ├── rag/
+│   ├── realtime/
+│   └── workspace/
+├── docs/               # News, roadmap, and changelog
+└── tests/              # SDK and service behavior tests
+```
 
-Read these references only when relevant:
+Confirm the actual directory layout when browsing a checkout. Start with the
+example category matching the task, read its README and code, then follow its
+imports into `src/agentscope/`. Search within those directories for the needed
+classes or features. Prefer existing framework capabilities over recreating
+them; check base classes and inherited methods before adding custom behavior.
 
-- [Multi-agent orchestration](references/multi_agent_orchestration.md): direct
+## Resources
+
+### Official Documentation
+
+- [AgentScope documentation](https://docs.agentscope.io/): Concepts, API usage,
+  and guides for the SDK and service layers.
+
+### GitHub Resources
+
+- [Main repository](https://github.com/agentscope-ai/agentscope): Source code,
+  examples, and tests.
+- [Examples](https://github.com/agentscope-ai/agentscope/tree/main/examples):
+  Reference implementations organized by functionality.
+- [Roadmap](https://github.com/agentscope-ai/agentscope/blob/main/docs/roadmap.md):
+  Development directions.
+- [Project board](https://github.com/orgs/agentscope-ai/projects/2): Development
+  task tracking.
+- [Design discussions](https://github.com/agentscope-ai/agentscope/discussions/categories/agentscope-design-book):
+  Design rationale and module discussions.
+
+### References
+
+Read these local references when the task needs more detail:
+
+- [Multi-agent orchestration](references/multi_agent_orchestration.md): Direct
   message passing, a worker as a tool, GoalPipeline, Agent Team, and A2A.
-- [Deployment guide](references/deployment_guide.md): built-in agent service,
-  storage/message bus, workspaces, and migration away from the old examples.
+- [Deployment guide](references/deployment_guide.md): Built-in service,
+  storage, message buses, workspaces, and sandbox backends.
 
-## Avoid mixing 1.x and 2.x
+### Scripts
 
-| Old example | 2.x approach |
-| --- | --- |
-| `ReActAgent`, `UserAgent`, `await agent(msg)` | `Agent`, `launch_console`, `await agent.reply(msg)` |
-| `sys_prompt`, agent `memory=` / `formatter=` | `system_prompt`, `state=`, `middlewares=`; formatter on the model |
-| `model_name=...`, model `api_key=...` | `model=...`, provider `credential=...` |
-| `InMemoryMemory`, `RedisSession` | Agent state / middleware; service storage for sessions |
-| `register_tool_function(fn)` | `Toolkit(tools=[FunctionTool(fn)])` |
-| `execute_shell_command`, `execute_python_code` | Current built-in tools and workspace backends; inspect available execution tools |
-| `ImageBlock`, positional `TextBlock(...)` / `Msg(...)` | `DataBlock`, `TextBlock(text=...)`, message factories or keyword fields |
-| `MsgHub`, `stream_printing_messages` | Explicit `reply()` calls, `reply_stream()`, pipeline or service team APIs |
+- `view_module_signature.py`: Inspect modules, classes, and methods in the
+  **active Python environment**, including inherited APIs and source locations.
+- `view_pypi_latest_version.sh`: Query the latest published AgentScope version.
 
-These are migration directions, not one-to-one semantic replacements. Check
-return types and lifecycle behavior when porting a real application. Do not
-claim evaluation/training APIs from older releases exist in the current SDK
-without checking the target source.
-
-## Inspect and validate APIs
-
-The helper reads the **active Python environment**, not an arbitrary checkout:
+Example queries:
 
 ```bash
 python /path/to/agentscope-skill/scripts/view_module_signature.py --module agentscope

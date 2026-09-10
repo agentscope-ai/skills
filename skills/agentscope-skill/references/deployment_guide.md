@@ -1,11 +1,9 @@
 # Deployment in AgentScope 2.x
 
-Use the version baseline in [SKILL.md](../SKILL.md). AgentScope 2.x includes a
-FastAPI app factory, service storage, message buses, and workspace backends.
-Start with these built-in APIs for a new 2.x application. The old guide's
-`agentscope_runtime.AgentApp`, `RedisSession`, and `BaseSandbox` snippets are
-not examples for this SDK. Projects using the separate AgentScope Runtime
-package need their own compatibility check; do not infer that it is deprecated.
+AgentScope's service layer builds on the agent SDK with a FastAPI app factory,
+service storage, message buses, and workspace backends. `agentscope-runtime`
+and `agentscope-studio` are not compatible with AgentScope 2.x. Use the built-in
+service APIs and workspace backends for deployment and sandboxed execution.
 
 ## Built-in agent service
 
@@ -17,8 +15,8 @@ uv pip install 'agentscope[service,storage-redis]>=2,<3'
 # uv pip install -e './agentscope[service,storage-redis]'
 ```
 
-Save this as `main.py`. It requires a running Redis server at localhost:6379.
-Start it with `uvicorn main:app --host 127.0.0.1 --port 8000`:
+A minimal service combines storage, a message bus, and a workspace manager.
+This example configures Redis storage at localhost:6379:
 
 ```python
 from agentscope.app import create_app
@@ -58,7 +56,7 @@ into a minimal service.
 ## Workspace-backed coding tools
 
 Use a workspace to provide tools and an offloader with a shared execution
-backend. This runnable terminal example uses a local working directory:
+backend. This example uses a local working directory:
 
 ```python
 import asyncio
@@ -109,8 +107,7 @@ use the workspace APIs if skills need to be installed and persisted there.
 Validate import and app construction separately from service startup, Redis
 connectivity, provider calls, and container execution. A no-network smoke test
 does not prove those external dependencies work. For a custom frontend, use the
-current event API to implement tool confirmation, interruption, and resumption;
-`stream_printing_messages` is not a 2.x streaming interface.
+current event API to implement tool confirmation, interruption, and resumption.
 
 References: [official docs](https://docs.agentscope.io/),
 [service example](https://github.com/agentscope-ai/agentscope/tree/main/examples/agent_service),
