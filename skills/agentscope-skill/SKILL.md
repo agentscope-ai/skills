@@ -1,305 +1,249 @@
 ---
 name: agentscope-skill
-description: This guide covers the design philosophy, core concepts, and practical usage of the AgentScope framework. Use this skill whenever the user wants to do anything with the AgentScope (Python) library. This includes building agent applications using AgentScope, answering questions about AgentScope, looking for guidance on how to use AgentScope, searching for examples or specific information (functions/classes/modules).
-version: 0.1.0
+description: Build and debug Python applications using AgentScope 2.x. Consult this skill for AgentScope APIs, agent tools, multi-agent orchestration, and agent service deployment.
+metadata:
+  version: "0.2.0"
 ---
 
-## Understanding AgentScope
-### What is AgentScope?
-AgentScope is a production-ready, enterprise-grade open-source framework for building multi-agent applications with large language models. Its functionalities cover:
+# AgentScope 2.0
 
-- **Development**: ReAct agent, context compression, short/long-term memory, tool use, human-in-the-loop, multi-agent orchestration, agent hooks, structured output, planning, integration with MCP, agent skill, LLMs API, voice interaction (TTS/Realtime), RAG
-- **Evaluation**: Evaluate multistep agentic applications with statistical analysis
-- **Training**: Agentic reinforcement learning
-- **Deployment**: Session/state management, sandbox, local/serverless/Kubernetes deployment
+AgentScope is an open-source framework for building and serving LLM-powered
+agent applications, from a single tool-using agent to coordinated multi-agent
+systems. It provides application orchestration and service infrastructure;
+model inference comes from configured providers, and tools execute through
+configured local or sandbox backends. It consists of two layers:
 
-### Installation
+- **Agent SDK:** Building blocks for agent applications, including agents,
+  models, messages, tools, context and state management, middleware, memory,
+  RAG, multi-agent orchestration, and workspaces.
+- **Service:** A service layer built on the SDK, providing APIs for agent and
+  session management, persistence, teams, scheduling, channels, and resource
+  management, with a Web UI example.
+
+This skill supports **AgentScope 2.x** and is based on **2.0.8**. API signatures
+and behavior should follow the SDK version actually installed in the user's
+environment. `agentscope-runtime` and `agentscope-studio` are not compatible
+with 2.x; use the built-in service and workspace capabilities instead.
+
+## Installation
+
+Python **3.11 or newer** is required.
+
 ```bash
 pip install agentscope
 # or
 uv pip install agentscope
 ```
 
-### Core Concepts
-- **Message**: The core abstraction for information exchange between agents. Supports heterogeneous content blocks (text, images, tool calls, tool results).
-```python
-from agentscope.message import Msg, TextBlock, ImageBlock, URLSource
+## Core Concepts and Basic Example
 
-msg = Msg(
-    name="user",
-    content=[TextBlock("Hello world"), ImageBlock(type="image", source=URLSource(type="url", url="..."))],
-    role="user"
-)
-```
-- **Agent**: LLM-empowered agent that can reason, use tools, and generate responses through iterative thinking and action loops.
-- **Toolkit**: Register and manage tools (Python functions, MCP, agent skills) that agents can call.
-- **Memory**: Store `Msg` objects as conversation history/context with a marking mechanism for advanced memory management (compression, retrieval).
-- **ChatModel**: Unified interface across different providers (OpenAI, Anthropic, DashScope, Ollama, etc.) with support for tool use and streaming.
-- **Formatter**: Convert `Msg` objects to LLM API-specific formats. Must be used with the corresponding ChatModel. Supports multi-agent conversations with different agent identifiers.
+- `Agent` owns the reasoning/acting loop. Use `reply()` for a final `Msg`, or
+  `reply_stream()` for events. `launch_console()` handles terminal interaction,
+  tool confirmation, and interruption.
+- Construct provider models with a credential object and `model=...`.
+  Formatters still exist, but are configured on the model; providers select a
+  default formatter. They are not passed to `Agent`.
+- `Toolkit` accepts tool objects, MCP clients, and skill paths/loaders. Wrap a
+  Python function with `FunctionTool`; use `ToolBase` for custom tool classes.
+- `Msg` contains typed content blocks. `UserMsg`, `AssistantMsg`, and `SystemMsg`
+  are convenience factories that also accept text strings. Binary media uses
+  `DataBlock` with `URLSource` or `Base64Source`, including `media_type`.
+- **Event:** Typed events expose agent execution to the application: reply and
+  model-call lifecycle, streamed content, tool calls/results, and requests for
+  confirmation or external execution. Consume them through `reply_stream()`;
+  send interaction result events back to resume the agent. `Msg` represents
+  conversation content, while events describe execution and interaction.
+- `AgentState` holds conversation and execution state. Agent configuration uses
+  `ContextConfig`, `InjectionConfig`, `ModelConfig`, and `ReActConfig`.
+  Middleware adds memory, RAG, tracing, and other hooks.
 
-### Basic Usage Examples
-#### Example 1: Simple Chatbot
+The following example shows how to compose an agent with a model and a Python
+function tool:
+
 ```python
-from agentscope.agent import ReActAgent, UserAgent
+import asyncio
+import os
+
+from agentscope.agent import Agent
+from agentscope.console import launch_console
+from agentscope.credential import DashScopeCredential
 from agentscope.model import DashScopeChatModel
-from agentscope.formatter import DashScopeChatFormatter
-from agentscope.memory import InMemoryMemory
-from agentscope.tool import Toolkit, execute_python_code, execute_shell_command
-import os, asyncio
+from agentscope.tool import FunctionTool, Toolkit
 
-async def main():
-    # Initialize toolkit with tools
-    toolkit = Toolkit()
-    toolkit.register_tool_function(execute_python_code)
-    toolkit.register_tool_function(execute_shell_command)
 
-    # Create ReActAgent with model, memory, formatter, and toolkit
-    agent = ReActAgent(
-        name="Friday",
-        sys_prompt="You're a helpful assistant named Friday.",
-        model=DashScopeChatModel(
-            model_name="qwen-max",
-            api_key=os.getenv("DASHSCOPE_API_KEY"),
-            stream=True,
-        ),
-        memory=InMemoryMemory(),
-        formatter=DashScopeChatFormatter(),
-        toolkit=toolkit,
-    )
-
-    # Create user agent for terminal input
-    user = UserAgent(name="user")
-
-    # Conversation loop
-    msg = None
-    while True:
-        msg = await agent(msg)  # Agent processes and replies
-        msg = await user(msg)   # User inputs next message
-        if msg.get_text_content() == "exit":
-            break
-
-asyncio.run(main())
-```
-
-#### Example 2: Multi-Agent Conversation
-AgentScope adopts explicit message passing for multi-agent conversations (PyTorch-like dynamic graph), allowing flexible information flow control.
-
-```python
-alice, bob, carol, david = ReActAgent(...), ReActAgent(...), ReActAgent(...), ReActAgent(...)
-
-msg_alice = await alice()
-msg_bob = await bob(msg_alice)  # Bob receives Alice's message and generate a reply. Alice doesn't receive Bob's message unless explicitly passed back.
-msg_carol = await carol(msg_alice)  # Similarly, the agent cannot receive messages from other agents unless explicitly passed.
-
-# Broadcasting with MsgHub, a syntactic sugar for message broadcasting within a group of agents
-from agentscope.pipeline import MsgHub
-
-async with MsgHub(
-    participants=[alice, bob, carol],
-    announcement=Msg("Host", "Let's discuss", "user")
-) as hub:
-    await alice()  # Bob and Carol receive this
-    await bob()    # Alice and Carol receive this
-
-    # Manual broadcast
-    await hub.broadcast(Msg("Host", "New topic", "user"))
-
-    # Dynamic participant management
-    hub.add(david)
-    hub.delete(bob)
-```
-
-#### Example 3: Master-Worker Pattern
-Wrap worker agents as tools for the master agent.
-
-```python
-from agentscope.tool import ToolResponse, Toolkit
-
-async def create_worker(task: str) -> ToolResponse:
-    """Create a worker agent for the given task.
+def add(a: int, b: int) -> str:
+    """Add two integers.
 
     Args:
-        task (`str`): The given task, which should be specific and concise.
+        a: First integer.
+        b: Second integer.
     """
-    task_msg = Msg(name="master", content=task, role="user") # Use the input task or wrap it into a more complex prompt
-    worker = ReActAgent(...)
-    res = await worker(task_msg)
-    return ToolResponse(content=res.content) # Return the worker's response as the tool response
+    return str(a + b)
 
-toolkit = Toolkit()
-toolkit.register_tool_function(create_worker)
+
+async def main() -> None:
+    agent = Agent(
+        name="Friday",
+        system_prompt="You are a helpful assistant named Friday.",
+        model=DashScopeChatModel(
+            credential=DashScopeCredential(
+                api_key=os.environ["DASHSCOPE_API_KEY"],
+            ),
+            model=os.environ.get("DASHSCOPE_MODEL", "qwen3.6-plus"),
+        ),
+        toolkit=Toolkit(tools=[FunctionTool(add)]),
+    )
+    await launch_console(agent)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
-## Working with AgentScope
-This section provides guidance on how to effectively answer questions about AgentScope or coding with the framework.
+For programmatic interaction, use the following inside an async function with
+an existing `agent`:
 
-### Step 1: Clone the Repository First
+```python
+from agentscope.message import UserMsg
 
-**CRITICAL**: Before doing anything else, clone or update the AgentScope repository. The repository contains essential examples and references.
+result = await agent.reply(UserMsg(name="user", content="Hello!"))
+print(result.get_text_content())
+```
+
+`reply()` consumes stream events. If a tool needs confirmation or external
+execution, a custom UI should consume `reply_stream()` and feed the appropriate
+`UserConfirmResultEvent` or `ExternalExecutionResultEvent` back to resume. The
+stream may end while waiting for that input; do not treat every stream end as
+successful completion. Use the console implementation and event schemas as the
+reference for this lifecycle. `FunctionTool` requests permission by default.
+
+For multimodal input, use a model that supports the supplied media type:
+
+```python
+from agentscope.message import DataBlock, TextBlock, URLSource, UserMsg
+
+message = UserMsg(
+    name="user",
+    content=[
+        TextBlock(text="Describe this image."),
+        DataBlock(
+            source=URLSource(
+                url="https://example.com/image.png",
+                media_type="image/png",
+            ),
+        ),
+    ],
+)
+```
+
+## Working with the Repository
+
+Reuse an existing AgentScope checkout or clone the repository to inspect its
+examples and implementations before writing application code:
 
 ```bash
-# Clone into this skill directory so that you can refer to it across different sessions
-cd /path/to/this/skill/directory
-git clone -b main https://github.com/agentscope-ai/agentscope.git
-
-# Or update if already cloned
-cd /path/to/this/skill/directory/agentscope
-git pull
+git clone --branch main https://github.com/agentscope-ai/agentscope.git
+# Inspect local changes before updating an existing checkout.
+git -C agentscope status --short
+git -C agentscope pull --ff-only origin main
 ```
-
-**Why this matters**: The repository contains working examples, complete API documentation in source code, and implementation patterns that are more reliable than guessing.
-
-### Step 2: Understand the Repository Structure
-The cloned repository is organized as follows. Note this may be outdated as the project evolves, you should always check the actual structure after cloning.
-```
-agentscope/
-├── src/agentscope/          # Main library source code
-│   ├── agent/               # Agent implementations (ReActAgent, etc.)
-│   ├── model/               # LLM API wrappers (OpenAI, Anthropic, DashScope, etc.)
-│   ├── formatter/           # Message formatters for different models
-│   ├── memory/              # Memory implementations
-│   ├── tool/                # Tool management and built-in tools
-│   ├── message/             # Msg class and content blocks
-│   ├── pipeline/            # Multi-agent orchestration (MsgHub, etc.)
-│   ├── session/             # Session/state management
-│   ├── mcp/                 # MCP integration
-│   ├── rag/                 # RAG functionality
-│   ├── realtime/            # Realtime voice interaction
-│   ├── tts/                 # Text-to-speech
-│   ├── evaluate/            # Evaluation tools
-│   └── ...                  # Other modules
-│
-├── examples/                # Working examples organized by category
-│   ├── agent/               # Different agent types
-│   │   └── ...
-│   ├── workflows/           # Multi-agent workflows
-│   │   └── ...
-│   ├── functionality/       # Specific features
-│   │   └── ...
-│   ├── deployment/          # Deployment patterns
-│   ├── integration/         # Third-party integrations
-│   ├── evaluation/          # Evaluation examples
-│   └── game/                # Game examples (e.g., werewolves)
-│
-├── docs/                    # Documentation
-│   ├── tutorial/            # Tutorial markdown files
-│   ├── changelog.md         # Version history
-│   └── roadmap.md           # Development roadmap
-│
-└── tests/                   # Test files
-```
-
-### Step 3: Browse Examples by Category
-
-When looking for similar implementations, **browse the examples directory by category** rather than searching by keywords alone:
-1. **Start with the category** that matches your use case:
-   - Building a specific agent type? → `examples/agent/`
-   - Multi-agent system? → `examples/workflows/`
-   - Need a specific feature (MCP, RAG, session)? → `examples/functionality/`
-   - Deployment patterns? → `examples/deployment/`
-2. **List the subdirectories** to see what's available:
-   - Use file listing tools to explore directory structure
-   - Read directory names to understand what each example covers
-3. **Read example files** to understand implementation patterns:
-   - Most examples contain a main script and supporting files
-   - Look for README files in subdirectories for explanations
-4. **Combine with text search** when needed:
-   - After identifying relevant directories, search within them for specific patterns
-   - Search for class names, method calls, or specific functionality
-
-**Example workflow**:
-```
-User asks: "Build a FastAPI app with AgentScope"
-→ Browse: List files in examples/deployment/
-→ Check: Are there any web service examples?
-→ Search: Look for "fastapi", "flask", "api", "server" in examples/
-→ Read: Found examples and adapt to user's needs
-```
-
-## Step 4: Verify Functionality Exists
-Before implementing custom solutions, verify if AgentScope already provides the functionality:
-
-1. **List required functionalities** (e.g., session management, MCP integration, RAG)
-2. **Check if provided**:
-   - Browse `examples` for examples
-   - Search tutorial documentation in `docs/tutorial/`
-   - Use the provided scripts (see Part 3) to explore API structure
-   - Read source code in `src/agentscope/` for implementation details
-3. **If not provided**: Check how to customize by reading base classes and inheritance patterns in source code
-
-### Step 5: Make a Plan
-Always create a plan before coding:
-1. Identify what AgentScope components you'll use
-2. Determine what needs custom implementation
-3. Outline the architecture and data flow
-4. Consider edge cases and error handling
-
-### Step 6: Code with API Reference
-When writing code:
-1. **Check docstrings and arguments** before using any class/method
-   - Read source code files to see signatures and documentation, or
-   - Use the provided scripts to view module/class structures
-   - **NEVER** make up classes, methods, or arguments
-2. **Check parent classes** - A class's functionality includes inherited methods
-3. **Manage lifecycle** - Clean up resources when needed (close connections, release memory)
-
-### Common Pitfalls to Avoid
-- ❌ Guessing API signatures without checking documentation
-- ❌ Implementing features that already exist in AgentScope
-- ❌ Mixing incompatible Model and Formatter (e.g., OpenAI model with DashScope formatter)
-- ❌ Forgetting to await async agent calls
-- ❌ Not checking parent class methods when searching for functionality
-- ❌ Searching by keywords only without browsing the organized examples directory structure
-
-## Resources
-This section lists all available resources for working with AgentScope.
-### Official Documentation
-- **[Tutorial](https://agentscope.ai/docs/)**: Comprehensive step-by-step guide covering most functionalities in detail. This is the primary resource for learning AgentScope.
-
-### GitHub Resources
-- **[Main Repository](https://github.com/agentscope-ai/agentscope)**: Source code, examples, and documentation
-- **[Project Board](https://github.com/orgs/agentscope-ai/projects/2)**: Official development roadmap and task tracking
-- **[Design Discussions](https://github.com/agentscope-ai/agentscope/discussions/categories/agentscope-design-book)**: In-depth explanations about specific modules/functions/components
 
 ### Repository Structure
-When the repository is cloned locally, the following structure is available for reference:
-- **`src/agentscope/`**: Main library source code
-  - Read this for API implementation details
-  - Check docstrings for parameter descriptions
-  - Understand inheritance hierarchies
-- **`examples/`**: Working examples demonstrating features
-  - Start here when building similar applications
-  - Examples cover: basic agents, multi-agent systems, tool usage, deployment patterns
-- **`docs/tutorial/`**: Tutorial documentation source files
-  - Markdown files explaining concepts and usage
-  - More detailed than README files
+
+```text
+agentscope/
+├── src/agentscope/
+│   ├── agent/          # Agents and their configuration
+│   ├── model/          # Chat model providers
+│   ├── credential/     # Provider credentials
+│   ├── console/        # Terminal interaction and event rendering
+│   ├── formatter/      # Provider-specific message formatting
+│   ├── message/        # Messages and typed content blocks
+│   ├── tool/           # Toolkit, adapters, and built-in tools
+│   ├── mcp/            # MCP clients and configuration
+│   ├── skill/          # Skill loading
+│   ├── state/          # Agent conversation and execution state
+│   ├── middleware/     # Hooks, memory, RAG, tracing, and budgets
+│   ├── event/          # Streaming and interaction events
+│   ├── permission/     # Tool permissions and human confirmation
+│   ├── pipeline/       # Multi-agent workflow abstractions
+│   ├── workspace/      # Local and sandboxed execution backends
+│   ├── rag/            # Retrieval building blocks
+│   ├── embedding/      # Embedding model providers
+│   ├── realtime/       # Realtime model interfaces
+│   ├── tts/            # Text-to-speech models
+│   └── app/            # Service APIs, storage, teams, channels, and hubs
+├── examples/
+│   ├── console/        # Terminal agent composition
+│   ├── agent_service/  # Service configuration
+│   ├── web_ui/         # Service frontend
+│   ├── pipeline/       # Executor/verifier workflow
+│   ├── a2a/            # Remote agent communication
+│   ├── long_term_memory/
+│   ├── rag/
+│   ├── realtime/
+│   └── workspace/
+├── docs/               # News, roadmap, and changelog
+└── tests/              # SDK and service behavior tests
+```
+
+Confirm the actual directory layout when browsing a checkout. Start with the
+example category matching the task, read its README and code, then follow its
+imports into `src/agentscope/`. Search within those directories for the needed
+classes or features. Prefer existing framework capabilities over recreating
+them; check base classes and inherited methods before adding custom behavior.
+
+## Resources
+
+### Official Documentation
+
+- [AgentScope documentation](https://docs.agentscope.io/): Concepts, API usage,
+  and guides for the SDK and service layers.
+
+### GitHub Resources
+
+- [Main repository](https://github.com/agentscope-ai/agentscope): Source code,
+  examples, and tests.
+- [Examples](https://github.com/agentscope-ai/agentscope/tree/main/examples):
+  Reference implementations organized by functionality.
+- [Roadmap](https://github.com/agentscope-ai/agentscope/blob/main/docs/roadmap.md):
+  Development directions.
+- [Project board](https://github.com/orgs/agentscope-ai/projects/2): Development
+  task tracking.
+- [Discussions](https://github.com/agentscope-ai/agentscope/discussions):
+  Community questions, ideas, and framework design discussions.
+
+### References
+
+Read these local references when the task needs more detail:
+
+- [Multi-agent orchestration](references/multi_agent_orchestration.md): Direct
+  message passing, a worker as a tool, GoalPipeline, Agent Team, and A2A.
+- [Deployment guide](references/deployment_guide.md): Built-in service,
+  storage, message buses, workspaces, and sandbox backends.
 
 ### Scripts
-Located in `scripts/` directory of this skill.
 
-- `view_pypi_latest_version.sh`: View the latest version of AgentScope on PyPI.
-```bash
-cd /path/to/this/skill/directory/scripts/
-bash view_pypi_latest_version.sh
-```
-- `view_module_signature.py`: Explore the structure of AgentScope modules, classes, and methods.
-**Search strategy**: Use deep-first search - start broad, then narrow down:
-1. `agentscope` → see all submodules
-2. `agentscope.agent` → see agent-related classes
-3. `agentscope.agent.ReActAgent` → see specific class methods
+- `view_module_signature.py`: Inspect modules, classes, and methods in the
+  **active Python environment**, including inherited APIs and source locations.
+- `view_pypi_latest_version.sh`: Query the latest published AgentScope version.
+
+Example queries:
 
 ```bash
-cd /path/to/this/skill/directory/scripts/
-# View top-level module
-python view_module_signature.py --module agentscope
-# View specific submodule
-python view_module_signature.py --module agentscope.agent
-# View specific class
-python view_module_signature.py --module agentscope.agent.ReActAgent
+python /path/to/agentscope-skill/scripts/view_module_signature.py --module agentscope
+python /path/to/agentscope-skill/scripts/view_module_signature.py --module agentscope.agent.Agent
+python /path/to/agentscope-skill/scripts/view_module_signature.py --module agentscope.agent.Agent.reply_stream
+python /path/to/agentscope-skill/scripts/view_module_signature.py --module agentscope.app.storage
+bash /path/to/agentscope-skill/scripts/view_pypi_latest_version.sh
 ```
 
-## Reference
-Located in `references/` directory of this skill.
+Module discovery does not import all optional integrations. Missing optional
+imports are reported; install only extras needed for the task, using the target
+`pyproject.toml` (for example `service`, `model-gemini`, or `model-ollama`).
+The PyPI helper reports release metadata only, not the installed version.
 
-- **`multi_agent_orchestration.md`**: Multi-agent orchestration concepts and implementation
-- **`deployment_guide.md`**: Deployment patterns and best practices
+Before delivering code, check public exports, constructor/method signatures,
+inherited methods, and cleanup requirements. Validate examples with the target
+version; use a fake model for offline behavior checks and distinguish those
+checks from actual provider, Redis, container, or deployment runs.

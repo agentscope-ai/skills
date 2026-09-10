@@ -1,86 +1,133 @@
-# Multi-Agent Orchestration
-There are two types of multi-agent orchestrations:
+# Multi-Agent Orchestration in AgentScope 2.x
 
-- Master-worker: a master agent assigns tasks to multiple worker agents, and the worker agents only report to the master agent.
-- Peer-to-peer (or conversational): multiple agents interact with each other, and each agent can perceive the information from different identities in the conversation.
+Choose the orchestration mechanism based on who controls execution: application
+code, a leader agent, a pipeline, or the service layer.
 
-## Master-Worker
-In AgentScope, the master-worker orchestration can be implemented by wrapping the worker agents as tools for the master agent.
-The worker agents can be designed to perform specific tasks, or a unified worker agent can be assigned with different tasks by providing different system prompts or tools.
+## Explicit message passing
 
-The following is an example of how to wrap a worker agent as a tool for the master agent.
+Use ordinary Python control flow when the application controls the order.
+Agents do not automatically observe another agent's replies. Each agent keeps
+its own state, so pass the messages that the next agent should see explicitly.
 
-> Note: the tool name, input arguments, and output organization of the worker agent can be customized as needed.
+Inside an async function, with two configured `Agent` instances:
 
 ```python
-from agentscope.pipeline import stream_printing_messages
-from agentscope.tool import ToolResponse, Toolkit, execute_shell_command
-from agentscope.agent import ReActAgent
-from agentscope.message import Msg
+from agentscope.message import UserMsg
 
-from typing import AsyncGenerator
+request = UserMsg(name="user", content="Propose a short implementation plan.")
+proposal = await alice.reply(request)
+review = await bob.reply(
+    [
+        proposal,
+        UserMsg(name="user", content="Review this plan for missing steps."),
+    ],
+)
+```
 
-async def create_worker(task: str) -> AsyncGenerator[ToolResponse, None]:
-    """{description}
+This example assumes neither agent is waiting on external input. If agents use
+tools requiring confirmation, consume their events and route the response back
+to the agent that requested it. Do not share one mutable agent instance across
+concurrent independent conversations.
+
+## Worker as a function tool
+
+Use this pattern when a leader model chooses when to delegate. This example
+gives the worker no tools, so its reply does not require nested tool
+confirmation.
+
+```python
+import asyncio
+import os
+
+from agentscope.agent import Agent
+from agentscope.console import launch_console
+from agentscope.credential import DashScopeCredential
+from agentscope.message import UserMsg
+from agentscope.model import DashScopeChatModel
+from agentscope.tool import FunctionTool, Toolkit
+from agentscope.types import ReplyFinishedReason
+
+
+def make_model() -> DashScopeChatModel:
+    return DashScopeChatModel(
+        credential=DashScopeCredential(
+            api_key=os.environ["DASHSCOPE_API_KEY"],
+        ),
+        model=os.environ.get("DASHSCOPE_MODEL", "qwen3.6-plus"),
+    )
+
+
+async def consult_worker(task: str) -> str:
+    """Ask a worker to analyze a self-contained task.
 
     Args:
-        task (`str`):
-            The task to be performed by the worker agent.
+        task: The task and all context the worker needs.
     """
-    toolkit = Toolkit()
-    toolkit.register_tool_function(execute_shell_command)
+    worker = Agent(
+        name="Worker",
+        system_prompt="Analyze the task and return a concise recommendation.",
+        model=make_model(),
+    )
+    result = await worker.reply(UserMsg(name="leader", content=task))
+    if result.finished_reason != ReplyFinishedReason.COMPLETED:
+        raise RuntimeError(
+            f"Worker did not complete: {result.finished_reason}, {result.error}",
+        )
+    return result.get_text_content()
 
-    agent = ReActAgent(...)
 
-    # We disable the terminal printing to avoid messy outputs
-    agent.set_console_output_enabled(False)
+async def main() -> None:
+    leader = Agent(
+        name="Leader",
+        system_prompt="Use consult_worker when specialist analysis is useful.",
+        model=make_model(),
+        toolkit=Toolkit(tools=[FunctionTool(consult_worker)]),
+    )
+    await launch_console(leader)
 
-    async for msg, _ in stream_printing_messages(
-        agents=[agent],
-        coroutine_task=agent(
-            # Wrap the task into a user Msg object
-            Msg("user", f"Please perform the following task: {task}", "user")
-        ),
-    ):
-        # Optionally, you can process the message here before yielding it to the master agent
-        # to control the information exposed to the master agent. For example, filter out the
-        # reasoning process and only expose the final action to the master agent.
-        yield msg
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
-## Peer-to-Peer
+`FunctionTool` normalizes the returned string into tool content. Do not yield
+raw agent events or `Msg` objects as tool results. For custom streaming tools,
+inspect `ToolChunk` and `FunctionTool.call` in the target source. If a worker
+also needs tool confirmation, design explicit event forwarding and resumption;
+a simple `await worker.reply(...)` wrapper does not handle that interaction.
 
-Because agentscope supports explicit message passing, the peer-to-peer orchestration can be implemented by allowing multiple agents to perceive the messages from each other.
-Additionally, the `pipeline` module provides different syntactic sugers to facilitate the implementation of different conversation patterns among multiple agents, such as broadcasting, fan-out, and so on.
+## Executor/verifier loop
 
-The following is an example of how to implement a peer-to-peer conversation among multiple agents.
+`GoalPipeline` runs an executor until a verifier accepts the result or the
+iteration limit is reached. With existing executor and verifier agents:
 
 ```python
-from agentscope.pipeline import MsgHub
-... # other imports
+from agentscope.console import launch_console
+from agentscope.pipeline import GoalPipeline
 
-alice = ReActAgent(...)
-bob = ReActAgent(...)
-charlie = ReActAgent(...)
-
-# Create a message hub
-async with MsgHub(
-    participants=[alice, bob, charlie],
-    # The announcement message will be broadcasted to all participants at the beginning of the conversation
-    announcement=Msg(
-        "user",
-        "Now introduce yourself in one sentence, including your name, age and career.",
-        "user",
-    ),
-) as hub:
-    # Group chat without manual message passing
-    await alice()
-    await bob()
-    await charlie()
+pipeline = GoalPipeline(executor=executor, verifier=verifier, max_iters=5)
+await launch_console(pipeline)
 ```
 
-## Further Reading
-More information about multi-agent orchestration or pipeline can be found in the following references:
-- Tutorial of pipeline:
-    - [Online link](https://doc.agentscope.io/tutorial/task_pipeline.html)
-    - [Source Code]({path_to_agentscope_repo}/agentscope/docs/tutorial/en/src/task_pipeline.py)
+The goal arrives as the initial input, not a constructor `goal` argument.
+Use `reply_stream()` for a custom frontend and route confirmation events back
+to the pipeline. The pipeline tracks the parked agent and iteration budget.
+A verifier reviewing generated files needs access to the relevant workspace.
+See `examples/pipeline/goal/` for the full implementation; choose permission
+settings for the application rather than copying a demo's bypass mode.
+
+## Service teams and remote agents
+
+- **Agent Team:** For persistent leader/worker coordination within the agent
+  service, inspect `examples/agent_service/`, `agentscope.app.SubAgentTemplate`,
+  and the team implementation under `src/agentscope/app/`. The service manages
+  team sessions and tools.
+- **A2A:** Use `agentscope.agent.A2AAgent` when communicating with a remote A2A
+  agent. Start from `examples/a2a/` and check the target constructor and optional
+  dependencies before configuring the remote endpoint.
+
+For service-backed workflows, continue with the
+[deployment guide](deployment_guide.md). Source examples:
+[GoalPipeline](https://github.com/agentscope-ai/agentscope/tree/main/examples/pipeline/goal),
+[agent service](https://github.com/agentscope-ai/agentscope/tree/main/examples/agent_service),
+[A2A](https://github.com/agentscope-ai/agentscope/tree/main/examples/a2a).
