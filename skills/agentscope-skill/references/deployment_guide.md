@@ -1,154 +1,117 @@
-# Deployment Guide
+# Deployment in AgentScope 2.x
 
-In agent application, [agentscope-runtime](https://github.com/agentscope-ai/agentscope-runtime) addresses three critical production deployment challenges:
+Use the version baseline in [SKILL.md](../SKILL.md). AgentScope 2.x includes a
+FastAPI app factory, service storage, message buses, and workspace backends.
+Start with these built-in APIs for a new 2.x application. The old guide's
+`agentscope_runtime.AgentApp`, `RedisSession`, and `BaseSandbox` snippets are
+not examples for this SDK. Projects using the separate AgentScope Runtime
+package need their own compatibility check; do not infer that it is deprecated.
 
-* Deployment: Unified `AgentApp` interface abstracts deployment targets (local, Docker, K8s, serverless, etc.)
-* Security Risks: Sandboxed execution environment isolate tool calls (Python, shell, browser, filesystem, etc.)
+## Built-in agent service
 
-## Quickstart
+Install the service extra in the target environment:
 
 ```bash
-uv pip install agentscope-runtime
-# or
-# pip install agentscope-runtime
+uv pip install 'agentscope[service,storage-redis]>=2,<3'
+# If targeting a source checkout instead:
+# uv pip install -e './agentscope[service,storage-redis]'
 ```
 
-## Deployment
-
-AgentScope Runtime provides `AgentApp`, a FastAPI-based service wrapper that turns your agents into production-ready APIs with streaming responses, health checks, and lifecycle management. It supports multiple deployment targets from local development to cloud platforms.
-
-> Note: The `AgentApp` provides a unified interface for deployment, but you can also choose to deploy your agent service using your own FastAPI server or other web frameworks if you prefer.
-
-### Complete Example
-
-The following example can also be found in the README.md of the [agentscope-runtime repository](https://github.com/agentscope-ai/agentscope-runtime)
+Save this as `main.py`. It requires a running Redis server at localhost:6379.
+Start it with `uvicorn main:app --host 127.0.0.1 --port 8000`:
 
 ```python
-import os
-from contextlib import asynccontextmanager
+from agentscope.app import create_app
+from agentscope.app.message_bus import InMemoryMessageBus
+from agentscope.app.storage import RedisStorage
+from agentscope.app.workspace_manager import LocalWorkspaceManager
 
-from fastapi import FastAPI
-from agentscope.agent import ReActAgent
-from agentscope.model import DashScopeChatModel
-from agentscope.formatter import DashScopeChatFormatter
-from agentscope.tool import Toolkit, execute_python_code
-from agentscope.pipeline import stream_printing_messages
-from agentscope.memory import InMemoryMemory
-from agentscope.session import RedisSession
-
-from agentscope_runtime.engine import AgentApp
-from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
-
-
-# 1. Define lifespan manager
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage resources during service startup and shutdown"""
-    # Startup: Initialize Session manager
-    import fakeredis
-
-    fake_redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
-    # NOTE: This FakeRedis instance is for development/testing only.
-    # In production, replace it with your own Redis client/connection
-    # (e.g., aioredis.Redis)
-    app.state.session = RedisSession(connection_pool=fake_redis.connection_pool)
-
-    yield  # Service is running
-
-    # Shutdown: Add cleanup logic here (e.g., closing database connections)
-    print("AgentApp is shutting down...")
-
-
-# 2. Create AgentApp instance
-agent_app = AgentApp(
-    app_name="Friday",
-    app_description="A helpful assistant",
-    lifespan=lifespan,
+app = create_app(
+    storage=RedisStorage(host="localhost", port=6379),
+    message_bus=InMemoryMessageBus(),
+    workspace_manager=LocalWorkspaceManager(basedir="./workspaces"),
 )
-
-
-# 3. Define request handling logic
-@agent_app.query(framework="agentscope")
-async def query_func(
-        self,
-        msgs,
-        request: AgentRequest = None,
-        **kwargs,
-):
-    session_id = request.session_id
-    user_id = request.user_id
-
-    toolkit = Toolkit()
-    toolkit.register_tool_function(execute_python_code)
-
-    agent = ReActAgent(
-        name="Friday",
-        model=DashScopeChatModel(
-            "qwen-turbo",
-            api_key=os.getenv("DASHSCOPE_API_KEY"),
-            stream=True,
-        ),
-        sys_prompt="You're a helpful assistant named Friday.",
-        toolkit=toolkit,
-        memory=InMemoryMemory(),
-        formatter=DashScopeChatFormatter(),
-    )
-    agent.set_console_output_enabled(enabled=False)
-
-    # Load state
-    await agent_app.state.session.load_session_state(
-        session_id=session_id,
-        user_id=user_id,
-        agent=agent,
-    )
-
-    async for msg, last in stream_printing_messages(
-            agents=[agent],
-            coroutine_task=agent(msgs),
-    ):
-        yield msg, last
-
-    # Save state
-    await agent_app.state.session.save_session_state(
-        session_id=session_id,
-        user_id=user_id,
-        agent=agent,
-    )
-
-
-# 4. Run the application
-agent_app.run(host="127.0.0.1", port=8090)
 ```
 
-## Tool Sandbox
+This assembles the service; it does not provision a user, model credential, or
+configured agent. Follow `examples/agent_service/README.md` and
+`examples/web_ui/` for those steps and the frontend. The FastAPI lifespan manages
+storage, message bus, and workspace manager resources.
 
-Tool Sandbox provides secure, isolated environments for executing code and tools without affecting your system. It supports multiple sandbox types including base Python/shell execution, GUI operations, browser automation, filesystem access, and mobile interactions, with both synchronous and asynchronous APIs.
+- **Storage** persists service records and sessions. `RedisStorage` is one
+  backend; inspect `AsyncSQLAlchemyStorage` and its optional dependencies if
+  using SQL. SDK `AgentState` is not a service session database.
+- **Message bus** carries live messages independently of storage.
+  `InMemoryMessageBus` is for a single process. Use a shared transport such as
+  `RedisMessageBus` for multi-process service coordination.
+- **Workspace manager** provisions tool environments and workspace isolation.
+  Configure it according to the intended user/agent/session lifetime.
+- **Resource access** is configurable via `resource_access_policy`; inspect
+  `agentscope.app.access` when adding application authorization. The default
+  sharing policy is not a substitute for the host application's authentication.
 
-### Complete Example
+Read the upstream service example before adding team templates, scheduling,
+channels, RAG indexing, MCP hubs, or skill hubs. Install the additional extras
+needed by those integrations rather than copying every optional integration
+into a minimal service.
+
+## Workspace-backed coding tools
+
+Use a workspace to provide tools and an offloader with a shared execution
+backend. This runnable terminal example uses a local working directory:
 
 ```python
-# --- Synchronous version ---
-from agentscope_runtime.sandbox import BaseSandbox
+import asyncio
+import os
 
-with BaseSandbox() as box:
-    # By default, pulls `agentscope/runtime-sandbox-base:latest` from DockerHub
-    print(box.list_tools()) # List all available tools
-    print(box.run_ipython_cell(code="print('hi')"))  # Run Python code
-    print(box.run_shell_command(command="echo hello"))  # Run shell command
-    input("Press Enter to continue...")
+from agentscope.agent import Agent
+from agentscope.console import launch_console
+from agentscope.credential import DashScopeCredential
+from agentscope.model import DashScopeChatModel
+from agentscope.tool import Toolkit
+from agentscope.workspace import LocalWorkspace
 
-# --- Asynchronous version ---
-from agentscope_runtime.sandbox import BaseSandboxAsync
 
-async with BaseSandboxAsync() as box:
-    # Default image is `agentscope/runtime-sandbox-base:latest`
-    print(await box.list_tools_async())  # List all available tools
-    print(await box.run_ipython_cell(code="print('hi')"))  # Run Python code
-    print(await box.run_shell_command(command="echo hello"))  # Run shell command
-    input("Press Enter to continue...")
+async def main() -> None:
+    async with LocalWorkspace(workdir="./workspace") as workspace:
+        agent = Agent(
+            name="Coder",
+            system_prompt="Help with coding tasks in the workspace.",
+            model=DashScopeChatModel(
+                credential=DashScopeCredential(
+                    api_key=os.environ["DASHSCOPE_API_KEY"],
+                ),
+                model=os.environ.get("DASHSCOPE_MODEL", "qwen3.6-plus"),
+            ),
+            toolkit=Toolkit(tools=await workspace.list_tools()),
+            offloader=workspace,
+        )
+        await launch_console(agent)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
-## Further Reading
+`LocalWorkspace` executes on the host; it is not a container security boundary.
+For isolated execution, inspect `examples/workspace/` for `DockerWorkspace`,
+`BubblewrapWorkspace`, `AppleContainerWorkspace`, or a remote workspace backend
+such as E2B, OpenSandbox, Daytona, or Kubernetes. Check each backend's runtime
+and dependency requirements and keep its context manager open while tools run.
 
-* [AgentScope-Runtime Documentation](https://runtime.agentscope.io/en/intro.html)
-* [AgentScope-Runtime GitHub Repository](https://github.com/agentscope-ai/agentscope-runtime)
+For file-backed long-term memory, see `AgenticMemoryMiddleware` and
+`examples/console/`. Bind its backend and working directory to the selected
+workspace. MCP clients and skill loaders can be supplied through `Toolkit`;
+use the workspace APIs if skills need to be installed and persisted there.
+
+## Validation boundaries
+
+Validate import and app construction separately from service startup, Redis
+connectivity, provider calls, and container execution. A no-network smoke test
+does not prove those external dependencies work. For a custom frontend, use the
+current event API to implement tool confirmation, interruption, and resumption;
+`stream_printing_messages` is not a 2.x streaming interface.
+
+References: [official docs](https://docs.agentscope.io/),
+[service example](https://github.com/agentscope-ai/agentscope/tree/main/examples/agent_service),
+[workspace examples](https://github.com/agentscope-ai/agentscope/tree/main/examples/workspace).
